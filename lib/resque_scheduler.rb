@@ -65,6 +65,12 @@ module ResqueScheduler
     unless existing_config && existing_config == config
       redis.hset(:schedules, name, encode(config))
       redis.sadd(:schedules_changed, name)
+      if config[:expiration].present?
+        auto_expire_schedule = {}
+        auto_expire_schedule[:submitted_time_in_seconds] = Time.zone.now.to_i.to_s
+        auto_expire_schedule[:elapsed_time_in_seconds] = config[:expiration]
+        redis.hset(:schedules_with_expiration, name, encode(auto_expire_schedule))
+      end
     end
     config
   end
@@ -78,6 +84,7 @@ module ResqueScheduler
   def remove_schedule(name)
     redis.hdel(:schedules, name)
     redis.sadd(:schedules_changed, name)
+    redis.hdel(:schedules_with_expiration, name)
   end
 
   # This method is nearly identical to +enqueue+ only it also
