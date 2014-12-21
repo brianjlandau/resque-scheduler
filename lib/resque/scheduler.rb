@@ -197,6 +197,23 @@ module Resque
             end
           end
         end
+        
+        unless 0 == Resque.redis.hlen(:schedules_with_expiration)
+          now = Time.now.in_time_zone
+          Resque.redis.hgetall(:schedules_with_expiration).tap do |h|
+            h.each do |name, config|
+              config = decode(config)
+
+              if config['submitted_time_in_seconds'].present? && config['elapsed_time_in_seconds'].present? &&
+                 (now.to_i - config['submitted_time_in_seconds'].to_i >= config['elapsed_time_in_seconds'].to_i)
+                  log! "Expiring schedule #{name}"
+                  Resque.remove_schedule(name)
+                  unschedule_job(name)
+              end
+            end
+          end
+        end
+        
         procline "Schedules Loaded"
       end
       
